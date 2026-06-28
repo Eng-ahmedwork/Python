@@ -337,13 +337,13 @@
 
         /* نموذج إضافة الأسئلة */
         .q-builder-row {
-            display: grid;
-            grid-template-columns: 2fr 1fr 1fr 1fr 50px;
-            gap: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
             margin-bottom: 20px;
             background: #1e1f29;
-            padding: 15px;
-            border-radius: 15px;
+            padding: 20px;
+            border-radius: 20px;
             border: 1px solid #2a2b36;
         }
 
@@ -1318,7 +1318,6 @@
             }
 
             .q-builder-row {
-                grid-template-columns: 1fr;
                 gap: 15px;
             }
 
@@ -1740,33 +1739,111 @@
             document.getElementById('new-student-pass').value = '';
         }
 
+        function compressAndConvertToBase64(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+                        const max_size = 800; // تقليل الحجم الأقصى لضمان عدم تجاوز المساحة
+                        if (width > height) {
+                            if (width > max_size) {
+                                height *= max_size / width;
+                                width = max_size;
+                            }
+                        } else {
+                            if (height > max_size) {
+                                width *= max_size / height;
+                                height = max_size;
+                            }
+                        }
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.7)); // ضغط بجودة 70%
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function previewQuestionImage(input) {
+            const file = input.files[0];
+            if (!file) return;
+            if (!file.type.startsWith('image/')) return;
+            
+            const qRow = input.closest('.q-builder-row');
+            const previewContainer = qRow.querySelector('.q-img-preview-container');
+            
+            previewContainer.innerHTML = `<span style="color:#888; font-size:0.9em;">جاري التحميل... ⏳</span>`;
+            try {
+                const base64 = await compressAndConvertToBase64(file);
+                previewContainer.innerHTML = `
+                    <div style="position: relative; display: inline-block;">
+                        <img class="q-img-preview" src="${base64}" style="max-height: 100px; border-radius: 12px; border: 3px solid var(--secondary); cursor: pointer;" onclick="openImageViewer('${base64}')">
+                        <button type="button" onclick="removeQuestionImage(this)" style="position: absolute; top: -10px; right: -10px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">✕</button>
+                    </div>
+                `;
+            } catch (e) {
+                console.error(e);
+                previewContainer.innerHTML = '';
+            }
+            input.value = '';
+        }
+
+        function removeQuestionImage(btn) {
+            const previewContainer = btn.closest('.q-img-preview-container');
+            previewContainer.innerHTML = '';
+        }
+
         function addQuestionField() {
             const container = document.getElementById('new-quiz-questions');
             const qCount = container.children.length + 1;
+            const uniqueRadioName = 'correct_' + Math.random().toString(36).substring(2, 11);
             const row = document.createElement('div');
             row.className = 'q-builder-row';
             row.innerHTML = `
-                <input type="text" placeholder="سؤال رقم ${qCount}" class="q-text">
-                <div class="q-opt-group">
-                    <input type="text" placeholder="خيار 1" class="q-opt">
-                    <label style="font-size: 0.8em; color: #10b981;">
-                        <input type="radio" name="correct_${qCount}" value="0" checked> صح
-                    </label>
+                <div style="display: flex; gap: 15px; align-items: center; width: 100%; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 250px;">
+                        <input type="text" placeholder="سؤال رقم ${qCount} (اختياري في حال وجود صورة)" class="q-text" style="width: 100%;">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <label style="color: #94a3b8; font-size: 0.9em; cursor: pointer; background: #2a2b36; padding: 10px 15px; border-radius: 12px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid #3e4053; transition: all 0.3s;" onmouseover="this.style.background='#343647'" onmouseout="this.style.background='#2a2b36'">
+                            <span>📸 أضف صورة للسؤال</span>
+                            <input type="file" class="q-img-input" accept="image/*" onchange="previewQuestionImage(this)" style="display: none;">
+                        </label>
+                    </div>
                 </div>
-                <div class="q-opt-group">
-                    <input type="text" placeholder="خيار 2" class="q-opt">
-                    <label style="font-size: 0.8em; color: #10b981;">
-                        <input type="radio" name="correct_${qCount}" value="1"> صح
-                    </label>
+                <div class="q-img-preview-container" style="margin-top: 5px; display: flex; align-items: center; gap: 10px;"></div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; width: 100%; margin-top: 10px;">
+                    <div class="q-opt-group" style="align-items: stretch;">
+                        <input type="text" placeholder="خيار 1" class="q-opt" style="width: 100%;">
+                        <label style="font-size: 0.85em; color: #10b981; margin-top: 5px; display: flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer;">
+                            <input type="radio" name="${uniqueRadioName}" value="0" checked style="width:auto !important; height:auto !important; margin:0;"> صح
+                        </label>
+                    </div>
+                    <div class="q-opt-group" style="align-items: stretch;">
+                        <input type="text" placeholder="خيار 2" class="q-opt" style="width: 100%;">
+                        <label style="font-size: 0.85em; color: #10b981; margin-top: 5px; display: flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer;">
+                            <input type="radio" name="${uniqueRadioName}" value="1" style="width:auto !important; height:auto !important; margin:0;"> صح
+                        </label>
+                    </div>
+                    <div class="q-opt-group" style="align-items: stretch;">
+                        <input type="text" placeholder="خيار 3" class="q-opt" style="width: 100%;">
+                        <label style="font-size: 0.85em; color: #10b981; margin-top: 5px; display: flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer;">
+                            <input type="radio" name="${uniqueRadioName}" value="2" style="width:auto !important; height:auto !important; margin:0;"> صح
+                        </label>
+                    </div>
                 </div>
-                <div class="q-opt-group">
-                    <input type="text" placeholder="خيار 3" class="q-opt">
-                    <label style="font-size: 0.8em; color: #10b981;">
-                        <input type="radio" name="correct_${qCount}" value="2"> صح
-                    </label>
+                <div style="text-align: left; margin-top: 5px;">
+                    <button type="button" class="btn btn-secondary" onclick="this.closest('.q-builder-row').remove()" 
+                            style="padding: 6px 15px; background: #ef4444; font-size: 0.85em; border-radius: 10px;">حذف السؤال 🗑️</button>
                 </div>
-                <button class="btn btn-secondary" onclick="this.parentElement.remove()" 
-                        style="padding: 5px 10px; background: #ef4444; font-size: 0.8em; height: fit-content;">حذف 🗑️</button>
             `;
             container.appendChild(row);
         }
@@ -1798,45 +1875,11 @@
             const qRows = document.querySelectorAll('.q-builder-row');
             if (!title || qRows.length === 0) return showAppAlert('يرجى إدخال العنوان وسؤال واحد على الأقل!', 'warn');
 
-            // وظيفة لقراءة الملفات وضغطها وتحويلها لـ Base64
-            const readAndCompress = (file) => {
-                return new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        const img = new Image();
-                        img.onload = () => {
-                            const canvas = document.createElement('canvas');
-                            let width = img.width;
-                            let height = img.height;
-                            const max_size = 800; // تقليل الحجم الأقصى لضمان عدم تجاوز المساحة
-                            if (width > height) {
-                                if (width > max_size) {
-                                    height *= max_size / width;
-                                    width = max_size;
-                                }
-                            } else {
-                                if (height > max_size) {
-                                    width *= max_size / height;
-                                    height = max_size;
-                                }
-                            }
-                            canvas.width = width;
-                            canvas.height = height;
-                            const ctx = canvas.getContext('2d');
-                            ctx.drawImage(img, 0, 0, width, height);
-                            resolve(canvas.toDataURL('image/jpeg', 0.7)); // ضغط بجودة 70%
-                        };
-                        img.src = e.target.result;
-                    };
-                    reader.readAsDataURL(file);
-                });
-            };
-
             let images = [];
             // إذا كان هناك ملفات جديدة تم اختيارها
             if (imageFiles.length > 0) {
                 for (let i = 0; i < imageFiles.length; i++) {
-                    images.push(await readAndCompress(imageFiles[i]));
+                    images.push(await compressAndConvertToBase64(imageFiles[i]));
                 }
             } else if (editId) {
                 // إذا كان تعديل ولم يتم اختيار ملفات جديدة، نحتفظ بالصور القديمة
@@ -1849,15 +1892,23 @@
 
             const questions = [];
             qRows.forEach((row, idx) => {
-                const q = row.querySelector('.q-text').value;
-                const opts = Array.from(row.querySelectorAll('.q-opt')).map(i => i.value);
+                const q = row.querySelector('.q-text').value.trim();
+                const previewImg = row.querySelector('.q-img-preview');
+                const qImage = previewImg ? previewImg.src : '';
+                const opts = Array.from(row.querySelectorAll('.q-opt')).map(i => i.value.trim());
                 const selectedCorrect = row.querySelector('input[type="radio"]:checked');
-                if (q && opts.every(o => o) && selectedCorrect) {
-                    questions.push({ q, options: opts, answer: parseInt(selectedCorrect.value) });
+                
+                if ((q || qImage) && opts.every(o => o) && selectedCorrect) {
+                    questions.push({ 
+                        q, 
+                        qImage, 
+                        options: opts, 
+                        answer: parseInt(selectedCorrect.value) 
+                    });
                 }
             });
 
-            if (questions.length === 0) return showAppAlert('يرجى ملء كافة الاسئله!', 'warn');
+            if (questions.length === 0) return showAppAlert('يرجى ملء كافة الاسئله وملء الخيارات وتحديد الإجابة الصحيحة!', 'warn');
             const db = getDB();
 
             if (editId) {
@@ -1920,16 +1971,59 @@
             document.getElementById('cancel-edit-btn').style.display = 'inline-block';
             const container = document.getElementById('new-quiz-questions');
             container.innerHTML = '';
+            
             lesson.questions.forEach((q, idx) => {
                 const qNum = idx + 1;
+                const uniqueRadioName = 'correct_' + Math.random().toString(36).substring(2, 11);
                 const row = document.createElement('div');
                 row.className = 'q-builder-row';
+                
+                let imgPreviewHTML = '';
+                if (q.qImage) {
+                    imgPreviewHTML = `
+                        <div style="position: relative; display: inline-block;">
+                            <img class="q-img-preview" src="${q.qImage}" style="max-height: 100px; border-radius: 12px; border: 3px solid var(--secondary); cursor: pointer;" onclick="openImageViewer('${q.qImage}')">
+                            <button type="button" onclick="removeQuestionImage(this)" style="position: absolute; top: -10px; right: -10px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">✕</button>
+                        </div>
+                    `;
+                }
+
                 row.innerHTML = `
-                    <input type="text" class="q-text" value="${q.q}">
-                    <div class="q-opt-group"><input type="text" class="q-opt" value="${q.options[0]}"><label><input type="radio" name="correct_${qNum}" value="0" ${q.answer === 0 ? 'checked' : ''}></label></div>
-                    <div class="q-opt-group"><input type="text" class="q-opt" value="${q.options[1]}"><label><input type="radio" name="correct_${qNum}" value="1" ${q.answer === 1 ? 'checked' : ''}></label></div>
-                    <div class="q-opt-group"><input type="text" class="q-opt" value="${q.options[2]}"><label><input type="radio" name="correct_${qNum}" value="2" ${q.answer === 2 ? 'checked' : ''}></label></div>
-                    <button class="btn btn-secondary" onclick="this.parentElement.remove()" style="background:#e74c3c;">حذف</button>
+                    <div style="display: flex; gap: 15px; align-items: center; width: 100%; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 250px;">
+                            <input type="text" placeholder="سؤال رقم ${qNum} (اختياري في حال وجود صورة)" class="q-text" value="${q.q || ''}" style="width: 100%;">
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <label style="color: #94a3b8; font-size: 0.9em; cursor: pointer; background: #2a2b36; padding: 10px 15px; border-radius: 12px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid #3e4053; transition: all 0.3s;" onmouseover="this.style.background='#343647'" onmouseout="this.style.background='#2a2b36'">
+                                <span>📸 أضف صورة للسؤال</span>
+                                <input type="file" class="q-img-input" accept="image/*" onchange="previewQuestionImage(this)" style="display: none;">
+                            </label>
+                        </div>
+                    </div>
+                    <div class="q-img-preview-container" style="margin-top: 5px; display: flex; align-items: center; gap: 10px;">${imgPreviewHTML}</div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; width: 100%; margin-top: 10px;">
+                        <div class="q-opt-group" style="align-items: stretch;">
+                            <input type="text" placeholder="خيار 1" class="q-opt" value="${q.options[0]}" style="width: 100%;">
+                            <label style="font-size: 0.85em; color: #10b981; margin-top: 5px; display: flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer;">
+                                <input type="radio" name="${uniqueRadioName}" value="0" ${q.answer === 0 ? 'checked' : ''} style="width:auto !important; height:auto !important; margin:0;"> صح
+                            </label>
+                        </div>
+                        <div class="q-opt-group" style="align-items: stretch;">
+                            <input type="text" placeholder="خيار 2" class="q-opt" value="${q.options[1]}" style="width: 100%;">
+                            <label style="font-size: 0.85em; color: #10b981; margin-top: 5px; display: flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer;">
+                                <input type="radio" name="${uniqueRadioName}" value="1" ${q.answer === 1 ? 'checked' : ''} style="width:auto !important; height:auto !important; margin:0;"> صح
+                            </label>
+                        </div>
+                        <div class="q-opt-group" style="align-items: stretch;">
+                            <input type="text" placeholder="خيار 3" class="q-opt" value="${q.options[2]}" style="width: 100%;">
+                            <label style="font-size: 0.85em; color: #10b981; margin-top: 5px; display: flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer;">
+                                <input type="radio" name="${uniqueRadioName}" value="2" ${q.answer === 2 ? 'checked' : ''} style="width:auto !important; height:auto !important; margin:0;"> صح
+                            </label>
+                        </div>
+                    </div>
+                    <div style="text-align: left; margin-top: 5px;">
+                        <button type="button" class="btn btn-secondary" onclick="this.closest('.q-builder-row').remove()" style="padding: 6px 15px; background:#ef4444; font-size: 0.85em; border-radius: 10px;">حذف السؤال 🗑️</button>
+                    </div>
                 `;
                 container.appendChild(row);
             });
@@ -1993,8 +2087,14 @@
                 const studentChoice = res.answers[idx];
                 const isCorrect = studentChoice === q.answer;
 
+                let imgHTML = '';
+                if (q.qImage) {
+                    imgHTML = `<div style="margin: 10px 0;"><img src="${q.qImage}" style="max-height: 100px; border-radius: 8px; border: 2px solid var(--secondary); cursor: pointer;" onclick="openImageViewer('${q.qImage}')"></div>`;
+                }
+
                 html += `<div class="detail-item">
-                    <p style="margin-bottom: 10px;"><strong>س ${idx + 1}: ${q.q}</strong></p>
+                    <p style="margin-bottom: 10px;"><strong>س ${idx + 1}: ${q.q || ''}</strong></p>
+                    ${imgHTML}
                     <div class="result-options-list">`;
 
                 q.options.forEach((opt, oIdx) => {
@@ -2258,11 +2358,24 @@
             // استرجاع الإجابة السابقة إذا وجدت
             const savedValue = (window._quizAnswers && window._quizAnswers[idx] !== undefined) ? window._quizAnswers[idx] : null;
 
+            let imgHTML = '';
+            if (q.qImage) {
+                imgHTML = `
+                <div style="text-align: center; margin: 15px 0;">
+                    <img src="${q.qImage}" class="quiz-question-img" 
+                         style="max-width: 100%; max-height: 250px; border-radius: 15px; border: 4px solid var(--secondary); box-shadow: var(--shadow); cursor: pointer; transition: transform 0.2s;" 
+                         onclick="openImageViewer('${q.qImage}')"
+                         onmouseover="this.style.transform='scale(1.02)'" 
+                         onmouseout="this.style.transform='scale(1)'">
+                </div>`;
+            }
+
             let qHTML = `<div class="admin-section" style="border-right:5px solid var(--primary); padding:20px; margin-bottom:10px; animation: fadeIn 0.3s ease;">
-                <h4 style="font-size: 1.2em; margin-bottom: 15px;">${idx + 1}. ${q.q}</h4>
+                <h4 style="font-size: 1.2em; margin-bottom: 15px;">${idx + 1}. ${q.q || ''}</h4>
+                ${imgHTML}
                 ${q.options.map((opt, oIdx) => `
                 <label class="quiz-option-label">
-                <input type="radio" name="q${idx}" value="${oIdx}" class="quiz-radio-input" ${savedValue == oIdx ? 'checked' : ''}>
+                <input type="radio" name="q${idx}" value="${oIdx}" class="quiz-radio-input" ${savedValue === oIdx ? 'checked' : ''}>
                 <span class="quiz-custom-radio shape-${oIdx}"></span>
                 <span style="flex-grow:1; text-align:right;">${opt}</span></label>`).join('')}
             </div>`;
